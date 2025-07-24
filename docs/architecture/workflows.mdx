@@ -1,0 +1,392 @@
+---
+title: 'Workflow Orchestration'
+description: 'How ZEE Workflows coordinate multiple agents'
+---
+
+# Workflow Orchestration
+
+ZEE Workflows provide sophisticated orchestration capabilities to coordinate multiple AI agents in solving complex tasks. This document details the orchestration mechanisms and patterns.
+
+## Orchestration Overview
+
+```mermaid
+graph TB
+    subgraph "Orchestration Layer"
+        WF[Workflow Engine]
+        TM[Task Manager]
+        CM[Context Manager]
+        AM[Agent Manager]
+    end
+    
+    subgraph "Default Agents"
+        Planner[Planner Agent]
+        Executor[Executor Agent]
+    end
+    
+    subgraph "User Agents"
+        AgentA[Specialist Agent A]
+        AgentB[Specialist Agent B]
+        AgentC[Specialist Agent C]
+    end
+    
+    subgraph "State Management"
+        Context[Shared Context]
+        Queue[Action Queue]
+        Results[Task Results]
+    end
+    
+    WF --> TM
+    WF --> CM
+    WF --> AM
+    
+    AM --> Planner
+    AM --> Executor
+    AM --> AgentA
+    AM --> AgentB
+    AM --> AgentC
+    
+    CM --> Context
+    TM --> Queue
+    TM --> Results
+    
+    Planner -.-> Context
+    Executor -.-> Context
+    AgentA -.-> Context
+    AgentB -.-> Context
+    AgentC -.-> Context
+```
+
+## Task Planning and Decomposition
+
+The workflow uses a specialized planner agent to decompose complex goals into manageable tasks.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Workflow as ZEE Workflow
+    participant Planner
+    participant Context as Context Manager
+    
+    User->>Workflow: Initialize with goal
+    Workflow->>Context: Store goal in context
+    Workflow->>Planner: Request task breakdown
+    
+    Planner->>Planner: Analyze goal complexity
+    Planner->>Planner: Identify required capabilities
+    Planner->>Planner: Map to available agents
+    
+    Planner-->>Workflow: Return task plan
+    
+    Note over Planner: Task plan includes:
+    Note over Planner: - Individual tasks
+    Note over Planner: - Agent assignments
+    Note over Planner: - Dependencies
+    Note over Planner: - Success criteria
+    
+    Workflow->>Context: Update with task plan
+```
+
+## Task Execution Patterns
+
+### Sequential Execution
+
+For tasks with strict dependencies:
+
+```mermaid
+graph TD
+    Start([Start]) --> Task1[Task 1: Research]
+    Task1 --> Task2[Task 2: Analysis]
+    Task2 --> Task3[Task 3: Synthesis]
+    Task3 --> End([Complete])
+    
+    Task1 -.-> Agent1[Research Agent]
+    Task2 -.-> Agent2[Analysis Agent]
+    Task3 -.-> Agent3[Synthesis Agent]
+```
+
+### Parallel Execution
+
+For independent tasks:
+
+```mermaid
+graph TD
+    Start([Start]) --> Split{Split Tasks}
+    Split --> TaskA[Task A: Data Collection]
+    Split --> TaskB[Task B: Market Research]
+    Split --> TaskC[Task C: Technical Analysis]
+    
+    TaskA --> Merge{Merge Results}
+    TaskB --> Merge
+    TaskC --> Merge
+    
+    Merge --> Final[Final Synthesis]
+    Final --> End([Complete])
+    
+    TaskA -.-> AgentA[Data Agent]
+    TaskB -.-> AgentB[Research Agent]
+    TaskC -.-> AgentC[Technical Agent]
+    Final -.-> Executor[Executor Agent]
+```
+
+### Hybrid Execution
+
+Combining sequential and parallel patterns:
+
+```mermaid
+graph TD
+    Start([Start]) --> Phase1[Phase 1: Preparation]
+    
+    Phase1 --> Split{Parallel Tasks}
+    Split --> TaskA[Task A]
+    Split --> TaskB[Task B]
+    Split --> TaskC[Task C]
+    
+    TaskA --> Sync{Synchronize}
+    TaskB --> Sync
+    TaskC --> Sync
+    
+    Sync --> Phase2[Phase 2: Integration]
+    Phase2 --> Phase3[Phase 3: Finalization]
+    Phase3 --> End([Complete])
+```
+
+## Agent Communication Patterns
+
+### Direct Communication
+
+Agents communicate through shared context:
+
+```mermaid
+sequenceDiagram
+    participant AgentA
+    participant Context
+    participant AgentB
+    
+    AgentA->>Context: Store result
+    Context->>Context: Update shared state
+    AgentB->>Context: Retrieve data
+    Context-->>AgentB: Relevant information
+    AgentB->>AgentB: Process with context
+```
+
+### Mediated Communication
+
+Workflow orchestrator facilitates communication:
+
+```mermaid
+sequenceDiagram
+    participant AgentA
+    participant Workflow
+    participant AgentB
+    
+    AgentA->>Workflow: Complete task with result
+    Workflow->>Workflow: Process result
+    Workflow->>Workflow: Determine next actions
+    Workflow->>AgentB: Assign follow-up task
+    Note over Workflow,AgentB: Context automatically included
+```
+
+## Context Management
+
+The context manager maintains shared state across all agents in the workflow.
+
+```mermaid
+classDiagram
+    class ContextManager {
+        -context: ContextItem[]
+        +addItem(item: ContextItem): void
+        +getRelevantContext(agentName: string): ContextItem[]
+        +updateContext(updates: ContextUpdate[]): void
+        +getFullContext(): ContextItem[]
+    }
+    
+    class ContextItem {
+        +id: string
+        +type: "goal" | "task" | "result" | "message"
+        +content: any
+        +timestamp: Date
+        +agent?: string
+        +relevance?: string[]
+    }
+    
+    class ContextUpdate {
+        +action: "add" | "update" | "remove"
+        +item: ContextItem
+    }
+    
+    ContextManager --> ContextItem
+    ContextManager ..> ContextUpdate
+```
+
+### Context Filtering
+
+Context is filtered based on relevance to specific agents:
+
+```mermaid
+graph TB
+    FullContext[Full Context Store] --> Filter{Context Filter}
+    
+    Filter --> ResearchContext[Research Context]
+    Filter --> AnalysisContext[Analysis Context]
+    Filter --> SynthesisContext[Synthesis Context]
+    
+    ResearchContext --> ResearchAgent[Research Agent]
+    AnalysisContext --> AnalysisAgent[Analysis Agent]
+    SynthesisContext --> SynthesisAgent[Synthesis Agent]
+    
+    ResearchAgent -.-> Updates[Context Updates]
+    AnalysisAgent -.-> Updates
+    SynthesisAgent -.-> Updates
+    
+    Updates --> FullContext
+```
+
+## Iteration Control
+
+Workflows include sophisticated iteration control to prevent infinite loops and ensure progress.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Initialize
+    Initialize --> Planning
+    Planning --> Executing
+    
+    state Executing {
+        [*] --> TaskSelection
+        TaskSelection --> TaskExecution
+        TaskExecution --> TaskComplete
+        TaskComplete --> ProgressCheck
+        ProgressCheck --> TaskSelection: More tasks
+        ProgressCheck --> [*]: All tasks done
+    }
+    
+    Executing --> IterationCheck: After each cycle
+    IterationCheck --> Executing: Under limit
+    IterationCheck --> ForceComplete: Limit reached
+    
+    Executing --> Consolidation: Natural completion
+    ForceComplete --> Consolidation
+    Consolidation --> [*]
+    
+    note right of IterationCheck
+        Default: 50 iterations
+        Configurable per workflow
+        Prevents infinite loops
+    end note
+```
+
+## Error Handling and Recovery
+
+```mermaid
+graph TB
+    TaskStart[Task Execution] --> Success{Success?}
+    Success -->|Yes| Complete[Task Complete]
+    Success -->|No| ErrorType{Error Type}
+    
+    ErrorType -->|Recoverable| Retry[Retry Task]
+    ErrorType -->|Agent Error| ReassignAgent[Reassign to Different Agent]
+    ErrorType -->|Tool Error| FallbackTool[Use Fallback Tool]
+    ErrorType -->|Critical| FailGracefully[Fail Gracefully]
+    
+    Retry --> RetryCount{Retry Count}
+    RetryCount -->|< Max| TaskStart
+    RetryCount -->|>= Max| FailGracefully
+    
+    ReassignAgent --> TaskStart
+    FallbackTool --> TaskStart
+    
+    FailGracefully --> PartialResult[Return Partial Result]
+    Complete --> NextTask[Next Task]
+    PartialResult --> WorkflowEnd[Workflow End]
+    NextTask --> WorkflowEnd
+```
+
+## Workflow Templates
+
+### Research Workflow
+
+```mermaid
+graph TD
+    Goal[Research Goal] --> Decompose[Decompose Research Questions]
+    Decompose --> Parallel{Parallel Research}
+    
+    Parallel --> Web[Web Research]
+    Parallel --> Academic[Academic Research]
+    Parallel --> Data[Data Analysis]
+    
+    Web --> Synthesis[Synthesize Findings]
+    Academic --> Synthesis
+    Data --> Synthesis
+    
+    Synthesis --> Report[Generate Report]
+    Report --> Review[Quality Review]
+    Review --> Final[Final Output]
+```
+
+### Development Workflow
+
+```mermaid
+graph TD
+    Requirements[Requirements Analysis] --> Design[System Design]
+    Design --> Parallel{Parallel Development}
+    
+    Parallel --> Frontend[Frontend Development]
+    Parallel --> Backend[Backend Development]
+    Parallel --> Database[Database Design]
+    
+    Frontend --> Integration[System Integration]
+    Backend --> Integration
+    Database --> Integration
+    
+    Integration --> Testing[Testing & QA]
+    Testing --> Deployment[Deployment Planning]
+    Deployment --> Documentation[Documentation]
+```
+
+## Performance Optimization
+
+### Agent Pool Management
+
+```mermaid
+graph TB
+    subgraph "Agent Pool"
+        Idle[Idle Agents]
+        Active[Active Agents]
+        Queue[Waiting Queue]
+    end
+    
+    subgraph "Task Distribution"
+        Scheduler[Task Scheduler]
+        LoadBalancer[Load Balancer]
+    end
+    
+    Scheduler --> LoadBalancer
+    LoadBalancer --> Idle
+    Idle --> Active
+    Active --> Idle
+    Queue --> Active
+```
+
+### Concurrent Execution
+
+Tasks are executed concurrently when possible to optimize performance:
+
+```mermaid
+gantt
+    title Workflow Execution Timeline
+    dateFormat X
+    axisFormat %s
+    
+    section Sequential
+    Task 1    :0, 3
+    Task 2    :3, 6
+    Task 3    :6, 9
+    
+    section Parallel
+    Task A    :0, 3
+    Task B    :0, 4
+    Task C    :0, 2
+    Merge     :4, 5
+```
+
+This orchestration system enables powerful multi-agent workflows while maintaining control, observability, and error resilience.
