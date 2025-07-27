@@ -56,6 +56,15 @@
             ]
         },
         {
+            "group": "Architecture",
+            "pages": [
+                "architecture/overview",
+                "architecture/components",
+                "architecture/workflows",
+                "architecture/data-flow"
+            ]
+        },
+        {
             "group": "",
             "pages": ["zee-use-cases"]
         },

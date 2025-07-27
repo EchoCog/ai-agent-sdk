@@ -1,0 +1,461 @@
+---
+title: 'Data Flow Patterns'
+description: 'How data flows through the AI Agent SDK'
+---
+
+# Data Flow Patterns
+
+This document details how data flows through the AI Agent SDK, from user input to final output, including transformation patterns and state management.
+
+## Overall Data Flow
+
+```mermaid
+graph TD
+    subgraph "Input Layer"
+        UserInput[User Input]
+        Config[Configuration]
+        Context[Initial Context]
+    end
+    
+    subgraph "Processing Layer"
+        ZEE[ZEE Workflow]
+        Agents[Agent Network]
+        LLMs[LLM Providers]
+        Tools[External Tools]
+    end
+    
+    subgraph "State Layer"
+        SharedContext[Shared Context]
+        TaskQueue[Task Queue]
+        Results[Result Store]
+        Memory[Agent Memory]
+    end
+    
+    subgraph "Output Layer"
+        Response[Structured Response]
+        Artifacts[Generated Artifacts]
+        Logs[Execution Logs]
+    end
+    
+    UserInput --> ZEE
+    Config --> ZEE
+    Context --> SharedContext
+    
+    ZEE --> Agents
+    Agents --> LLMs
+    Agents --> Tools
+    
+    Agents <--> SharedContext
+    ZEE <--> TaskQueue
+    Agents --> Results
+    Agents <--> Memory
+    
+    Results --> Response
+    Tools --> Artifacts
+    ZEE --> Logs
+    
+    SharedContext -.-> Response
+    Results -.-> Response
+```
+
+## Message Flow Patterns
+
+### Single Agent Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent
+    participant LLM
+    participant Provider as AI Provider
+    
+    User->>Agent: Input message
+    Agent->>Agent: Add system prompts
+    Agent->>LLM: Enhanced message
+    LLM->>Provider: API request
+    Provider-->>LLM: API response
+    LLM-->>Agent: Parsed response
+    Agent-->>User: Final response
+    
+    Note over Agent,LLM: Message transformation:
+    Note over Agent,LLM: - System prompts added
+    Note over Agent,LLM: - Context injection
+    Note over Agent,LLM: - Tool definitions
+```
+
+### Multi-Agent Workflow Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant ZEE as ZEE Workflow
+    participant Context
+    participant AgentA
+    participant AgentB
+    participant LLM
+    
+    User->>ZEE: Goal + Input
+    ZEE->>Context: Store initial context
+    ZEE->>AgentA: Task assignment
+    
+    AgentA->>Context: Read relevant context
+    Context-->>AgentA: Filtered context
+    AgentA->>LLM: Generate with context
+    LLM-->>AgentA: Response
+    AgentA->>Context: Update with results
+    
+    ZEE->>AgentB: Next task assignment
+    AgentB->>Context: Read updated context
+    Context-->>AgentB: Enriched context
+    AgentB->>LLM: Generate with context
+    LLM-->>AgentB: Response
+    AgentB->>Context: Final update
+    
+    ZEE->>Context: Gather final context
+    Context-->>ZEE: Complete context
+    ZEE-->>User: Synthesized result
+```
+
+## Data Transformation Pipeline
+
+### Input Processing
+
+```mermaid
+graph LR
+    RawInput[Raw User Input] --> Parse[Input Parser]
+    Parse --> Validate[Validation]
+    Validate --> Enrich[Context Enrichment]
+    Enrich --> Structure[Message Structure]
+    Structure --> Queue[Task Queue]
+    
+    subgraph "Validation Rules"
+        TypeCheck[Type Checking]
+        Schema[Schema Validation]
+        Security[Security Filtering]
+    end
+    
+    Validate --> TypeCheck
+    Validate --> Schema
+    Validate --> Security
+```
+
+### Message Transformation
+
+Messages undergo multiple transformations as they flow through the system:
+
+```mermaid
+graph TD
+    UserMessage[User Message] --> SystemPrompt[+ System Prompt]
+    SystemPrompt --> Instructions[+ Agent Instructions]
+    Instructions --> ContextInjection[+ Relevant Context]
+    ContextInjection --> ToolDefinitions[+ Tool Definitions]
+    ToolDefinitions --> LLMMessage[LLM-Ready Message]
+    
+    LLMMessage --> LLMResponse[LLM Response]
+    LLMResponse --> ToolExtraction[Tool Call Extraction]
+    ToolExtraction --> ResponseParsing[Response Parsing]
+    ResponseParsing --> ContextUpdate[Context Updates]
+    ContextUpdate --> FinalResponse[Final Response]
+```
+
+### Tool Integration Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant LLM
+    participant ToolRegistry
+    participant Tool
+    participant ExternalAPI
+    participant Context
+    
+    Agent->>LLM: Request with tools
+    LLM-->>Agent: Response with tool calls
+    
+    loop For each tool call
+        Agent->>ToolRegistry: Resolve tool
+        ToolRegistry-->>Agent: Tool instance
+        Agent->>Tool: Execute with parameters
+        Tool->>Tool: Validate parameters
+        Tool->>ExternalAPI: API call
+        ExternalAPI-->>Tool: Raw data
+        Tool->>Tool: Process & format
+        Tool-->>Agent: Structured result
+        Agent->>Context: Store tool result
+    end
+    
+    Agent->>LLM: Continue with results
+    LLM-->>Agent: Final response
+```
+
+## Context Management Flow
+
+### Context Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created: Initialize context
+    Created --> Populated: Add initial data
+    Populated --> Active: Begin processing
+    
+    state Active {
+        [*] --> Reading
+        Reading --> Writing: Agent updates
+        Writing --> Reading: Data stored
+        Reading --> Filtering: Context request
+        Filtering --> Reading: Filtered data
+    }
+    
+    Active --> Archived: Workflow complete
+    Archived --> [*]: Cleanup
+    
+    note right of Filtering
+        Context filtered by:
+        - Agent relevance
+        - Recency
+        - Importance
+    end note
+```
+
+### Context Propagation
+
+```mermaid
+graph TB
+    subgraph "Context Sources"
+        UserGoal[User Goal]
+        TaskResults[Task Results]
+        ToolOutputs[Tool Outputs]
+        AgentMemory[Agent Memory]
+    end
+    
+    subgraph "Context Processing"
+        Aggregator[Context Aggregator]
+        Filter[Relevance Filter]
+        Prioritizer[Priority Ranking]
+    end
+    
+    subgraph "Context Distribution"
+        PlannerContext[Planner Context]
+        WorkerContext[Worker Context]
+        ExecutorContext[Executor Context]
+    end
+    
+    UserGoal --> Aggregator
+    TaskResults --> Aggregator
+    ToolOutputs --> Aggregator
+    AgentMemory --> Aggregator
+    
+    Aggregator --> Filter
+    Filter --> Prioritizer
+    Prioritizer --> PlannerContext
+    Prioritizer --> WorkerContext
+    Prioritizer --> ExecutorContext
+```
+
+## State Management Patterns
+
+### Workflow State
+
+```mermaid
+graph TD
+    subgraph "Workflow State"
+        WS[Workflow Status]
+        TQ[Task Queue]
+        AR[Active Results]
+        IT[Iteration Count]
+    end
+    
+    subgraph "Agent State"
+        AS[Agent Status]
+        AM[Agent Memory]
+        AC[Active Context]
+        AT[Agent Tools]
+    end
+    
+    subgraph "Shared State"
+        SC[Shared Context]
+        GS[Global State]
+        ER[Error Registry]
+        PR[Progress Tracking]
+    end
+    
+    WS --> AS
+    TQ --> AC
+    AR --> SC
+    IT --> PR
+    
+    AS --> GS
+    AM --> SC
+    AT --> GS
+    ER --> PR
+```
+
+### State Synchronization
+
+```mermaid
+sequenceDiagram
+    participant Agent1
+    participant StateManager
+    participant Agent2
+    participant Agent3
+    
+    Agent1->>StateManager: Update state
+    StateManager->>StateManager: Validate change
+    StateManager->>StateManager: Apply update
+    
+    par Broadcast to other agents
+        StateManager->>Agent2: State change notification
+        StateManager->>Agent3: State change notification
+    end
+    
+    Agent2->>StateManager: Request latest state
+    StateManager-->>Agent2: Current state
+    Agent3->>StateManager: Request latest state
+    StateManager-->>Agent3: Current state
+```
+
+## Error Propagation Flow
+
+```mermaid
+graph TD
+    Error[Error Occurs] --> Classification[Error Classification]
+    Classification --> Recoverable{Recoverable?}
+    
+    Recoverable -->|Yes| LocalHandling[Local Error Handling]
+    Recoverable -->|No| Propagation[Error Propagation]
+    
+    LocalHandling --> Retry[Retry Logic]
+    LocalHandling --> Fallback[Fallback Strategy]
+    LocalHandling --> Continue[Continue Processing]
+    
+    Propagation --> ParentAgent[Parent Agent]
+    Propagation --> Workflow[Workflow Manager]
+    Propagation --> User[User Notification]
+    
+    Retry --> Success{Success?}
+    Success -->|Yes| Continue
+    Success -->|No| Escalation[Escalate Error]
+    
+    Escalation --> Propagation
+    
+    subgraph "Error Types"
+        ToolError[Tool Error]
+        LLMError[LLM Error]
+        ValidationError[Validation Error]
+        NetworkError[Network Error]
+    end
+    
+    Error --> ToolError
+    Error --> LLMError
+    Error --> ValidationError
+    Error --> NetworkError
+```
+
+## Performance Optimization Patterns
+
+### Data Caching
+
+```mermaid
+graph TB
+    Request[Data Request] --> Cache{Cache Hit?}
+    Cache -->|Yes| CacheReturn[Return Cached Data]
+    Cache -->|No| Fetch[Fetch Fresh Data]
+    
+    Fetch --> Process[Process Data]
+    Process --> Store[Store in Cache]
+    Store --> Return[Return to Requester]
+    
+    subgraph "Cache Layers"
+        L1[Agent Memory Cache]
+        L2[Context Cache]
+        L3[Tool Result Cache]
+        L4[LLM Response Cache]
+    end
+    
+    Request --> L1
+    L1 --> L2
+    L2 --> L3
+    L3 --> L4
+```
+
+### Streaming Data Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent
+    participant LLM
+    participant Stream as Streaming Interface
+    
+    User->>Agent: Request (stream: true)
+    Agent->>LLM: Streaming request
+    LLM->>Stream: Initialize stream
+    
+    loop Stream chunks
+        LLM->>Stream: Data chunk
+        Stream->>Agent: Process chunk
+        Agent->>User: Partial response
+    end
+    
+    LLM->>Stream: End stream
+    Stream->>Agent: Final processing
+    Agent->>User: Complete response
+```
+
+## Data Persistence Patterns
+
+### Temporary Data
+
+```mermaid
+graph LR
+    subgraph "Session Storage"
+        Context[Context Data]
+        Memory[Agent Memory]
+        Queue[Task Queue]
+        Results[Intermediate Results]
+    end
+    
+    subgraph "Lifecycle"
+        Create[Create]
+        Use[Use]
+        Cleanup[Cleanup]
+    end
+    
+    Context --> Create
+    Memory --> Create
+    Queue --> Create
+    Results --> Create
+    
+    Create --> Use
+    Use --> Cleanup
+```
+
+### Configuration Data
+
+```mermaid
+graph TD
+    subgraph "Configuration Sources"
+        EnvVars[Environment Variables]
+        ConfigFiles[Configuration Files]
+        UserInput[User Input]
+        Defaults[Default Values]
+    end
+    
+    subgraph "Configuration Hierarchy"
+        GlobalConfig[Global Config]
+        WorkflowConfig[Workflow Config]
+        AgentConfig[Agent Config]
+        ToolConfig[Tool Config]
+    end
+    
+    EnvVars --> GlobalConfig
+    ConfigFiles --> WorkflowConfig
+    UserInput --> AgentConfig
+    Defaults --> ToolConfig
+    
+    GlobalConfig --> WorkflowConfig
+    WorkflowConfig --> AgentConfig
+    AgentConfig --> ToolConfig
+```
+
+This data flow architecture ensures efficient, reliable, and observable data processing throughout the AI Agent SDK.

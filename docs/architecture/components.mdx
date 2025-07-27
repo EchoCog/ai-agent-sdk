@@ -1,0 +1,375 @@
+---
+title: 'Component Architecture'
+description: 'Detailed architecture of individual SDK components'
+---
+
+# Component Architecture
+
+This document provides detailed technical architecture for each core component of the AI Agent SDK.
+
+## LLM Interface Architecture
+
+The LLM component provides a unified interface across different AI providers.
+
+```mermaid
+classDiagram
+    class Base {
+        +type: string
+        +constructor(type: string)
+    }
+    
+    class LLM {
+        -model: LanguageModel
+        +constructor(provider: ModelProvider)
+        +generate(args: LLMParameters): Promise~LLMResponse~
+        -getProvider(provider: string): LanguageModel
+    }
+    
+    class ModelProvider {
+        +provider: "openai" | "anthropic" | "google"
+        +id: string
+    }
+    
+    class LLMParameters {
+        +messages: CoreMessage[]
+        +tools?: ToolSet
+        +temperature?: number
+        +maxTokens?: number
+        +schema?: ZodObject
+    }
+    
+    class LLMResponse {
+        +text?: string
+        +object?: any
+        +toolCalls?: ToolCall[]
+        +usage?: Usage
+    }
+    
+    Base <|-- LLM
+    LLM --> ModelProvider
+    LLM ..> LLMParameters
+    LLM ..> LLMResponse
+```
+
+### Provider Integration
+
+```mermaid
+graph TB
+    subgraph "LLM Interface"
+        LLM[LLM Class]
+        Config[Provider Config]
+    end
+    
+    subgraph "AI SDK Providers"
+        OpenAI[@ai-sdk/openai]
+        Anthropic[@ai-sdk/anthropic]
+        Google[@ai-sdk/google]
+    end
+    
+    subgraph "External APIs"
+        OpenAIAPI[OpenAI API]
+        AnthropicAPI[Anthropic API]
+        GoogleAPI[Google AI API]
+    end
+    
+    LLM --> Config
+    Config --> OpenAI
+    Config --> Anthropic
+    Config --> Google
+    
+    OpenAI --> OpenAIAPI
+    Anthropic --> AnthropicAPI
+    Google --> GoogleAPI
+```
+
+## Agent Architecture
+
+Agents encapsulate AI models with specific behaviors and capabilities.
+
+```mermaid
+classDiagram
+    class Base {
+        +type: string
+        +constructor(type: string)
+    }
+    
+    class Agent {
+        -_config: AgentConfig
+        -_llm: LLM
+        +name: string
+        +description: string
+        +instructions: string[]
+        +constructor(config: AgentConfig)
+        +generate(args: AgentGenerateParameters): Promise~AgentResponse~
+    }
+    
+    class AgentConfig {
+        +name: string
+        +model: ModelProvider
+        +description: string
+        +instructions?: string[]
+        +tools?: ToolSet
+        +temperature?: number
+    }
+    
+    class AgentGenerateParameters {
+        +messages?: CoreMessage[]
+        +maxTokens?: number
+        +temperature?: number
+    }
+    
+    class AgentResponse {
+        +text: string
+        +toolCalls?: ToolCall[]
+        +usage?: Usage
+        +finishReason?: string
+    }
+    
+    Base <|-- Agent
+    Agent --> LLM
+    Agent --> AgentConfig
+    Agent ..> AgentGenerateParameters
+    Agent ..> AgentResponse
+```
+
+### Agent Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Created: new Agent(config)
+    Created --> Ready: Validation complete
+    Ready --> Processing: generate() called
+    Processing --> ToolExecution: Tools needed
+    Processing --> Responding: Direct response
+    ToolExecution --> Processing: Tool results
+    Responding --> Ready: Response complete
+    Ready --> [*]: Agent destroyed
+    
+    note right of ToolExecution
+        Tools executed in parallel
+        Results merged back
+    end note
+```
+
+## Tools System Architecture
+
+The tools system provides extensible capabilities for agents.
+
+```mermaid
+classDiagram
+    class Tool {
+        <<abstract>>
+        +name: string
+        +description: string
+        +parameters: ZodObject
+        +execute(args: any): Promise~any~
+    }
+    
+    class BaseGoldRushTool {
+        #apiKey: string
+        #baseUrl: string
+        +constructor()
+        #makeRequest(endpoint: string, params: any): Promise~any~
+    }
+    
+    class NFTBalancesTool {
+        +name: "nft_balances"
+        +description: string
+        +parameters: ZodObject
+        +execute(args: NFTBalancesParams): Promise~NFTBalance[]~
+    }
+    
+    class TokenBalancesTool {
+        +name: "token_balances"
+        +description: string
+        +parameters: ZodObject
+        +execute(args: TokenBalancesParams): Promise~TokenBalance[]~
+    }
+    
+    class CustomTool {
+        +name: string
+        +description: string
+        +parameters: ZodObject
+        +execute(args: any): Promise~any~
+    }
+    
+    Tool <|-- BaseGoldRushTool
+    Tool <|-- CustomTool
+    BaseGoldRushTool <|-- NFTBalancesTool
+    BaseGoldRushTool <|-- TokenBalancesTool
+```
+
+### Tool Execution Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant LLM
+    participant ToolRegistry
+    participant Tool
+    participant External as External API
+    
+    Agent->>LLM: generate(with tools)
+    LLM->>LLM: Process prompt
+    LLM-->>Agent: Response with tool calls
+    
+    loop For each tool call
+        Agent->>ToolRegistry: Get tool by name
+        ToolRegistry-->>Agent: Tool instance
+        Agent->>Tool: execute(parameters)
+        Tool->>External: API call
+        External-->>Tool: API response
+        Tool-->>Agent: Processed result
+    end
+    
+    Agent->>LLM: Continue with tool results
+    LLM-->>Agent: Final response
+```
+
+## ZEE Workflow Architecture
+
+ZEE Workflows orchestrate multiple agents to solve complex problems.
+
+```mermaid
+classDiagram
+    class Base {
+        +type: string
+        +constructor(type: string)
+    }
+    
+    class ZeeWorkflow {
+        -agents: Record~string, Agent~
+        -defaultAgents: Record~string, Agent~
+        -addedAgents: Record~string, Agent~
+        -context: ContextItem[]
+        -actionQueue: AgentAction[]
+        -maxIterations: number
+        -temperature: number
+        -goal: string
+        +constructor(options: ZeeWorkflowOptions)
+        +run(): Promise~ZEEWorkflowResponse~
+        +addAgent(agent: Agent): void
+        +removeAgent(name: string): void
+        -executeTask(task: ZEETask): Promise~any~
+        -planTasks(): Promise~ZEETask[]~
+    }
+    
+    class ZeeWorkflowOptions {
+        +agents: Agent[]
+        +model: ModelProvider
+        +goal: string
+        +config?: WorkflowConfig
+    }
+    
+    class WorkflowConfig {
+        +maxIterations?: number
+        +temperature?: number
+    }
+    
+    class ZEETask {
+        +id: string
+        +description: string
+        +assignedAgent: string
+        +dependencies?: string[]
+        +status: "pending" | "executing" | "completed" | "failed"
+    }
+    
+    class ZEEWorkflowResponse {
+        +success: boolean
+        +result: any
+        +iterations: number
+        +tasks: ZEETask[]
+        +context: ContextItem[]
+    }
+    
+    Base <|-- ZeeWorkflow
+    ZeeWorkflow --> Agent
+    ZeeWorkflow --> ZeeWorkflowOptions
+    ZeeWorkflow ..> ZEETask
+    ZeeWorkflow ..> ZEEWorkflowResponse
+```
+
+### Workflow Execution Engine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Initialize: Create workflow
+    Initialize --> Planning: Generate task plan
+    Planning --> TaskQueue: Queue tasks
+    TaskQueue --> Executing: Execute next task
+    Executing --> ToolCalls: Tools needed?
+    Executing --> TaskComplete: Direct completion
+    ToolCalls --> TaskComplete: Tools executed
+    TaskComplete --> MoreTasks: Check queue
+    MoreTasks --> Executing: Tasks remaining
+    MoreTasks --> Consolidate: All tasks done
+    Consolidate --> Complete: Final result
+    Complete --> [*]
+    
+    TaskComplete --> MaxIterations: Iteration check
+    MaxIterations --> Consolidate: Limit reached
+    
+    note right of Planning
+        Planner agent analyzes goal
+        Decomposes into discrete tasks
+        Assigns agents to tasks
+    end note
+    
+    note right of Consolidate
+        Executor agent reviews results
+        Synthesizes final response
+        Validates goal completion
+    end note
+```
+
+## Inter-Component Communication
+
+```mermaid
+graph TB
+    subgraph "ZEE Workflow"
+        Orchestrator[Workflow Orchestrator]
+        Context[Context Manager]
+        TaskQueue[Task Queue]
+    end
+    
+    subgraph "Agent Layer"
+        PlannerAgent[Planner Agent]
+        WorkerAgent[Worker Agent]
+        ExecutorAgent[Executor Agent]
+    end
+    
+    subgraph "LLM Layer"
+        LLMInterface[LLM Interface]
+        ProviderA[Provider A]
+        ProviderB[Provider B]
+    end
+    
+    subgraph "Tools Layer"
+        ToolRegistry[Tool Registry]
+        GoldRushTools[GoldRush Tools]
+        CustomTools[Custom Tools]
+    end
+    
+    Orchestrator --> PlannerAgent
+    Orchestrator --> WorkerAgent
+    Orchestrator --> ExecutorAgent
+    
+    PlannerAgent --> LLMInterface
+    WorkerAgent --> LLMInterface
+    ExecutorAgent --> LLMInterface
+    
+    WorkerAgent --> ToolRegistry
+    ToolRegistry --> GoldRushTools
+    ToolRegistry --> CustomTools
+    
+    LLMInterface --> ProviderA
+    LLMInterface --> ProviderB
+    
+    Context -.-> PlannerAgent
+    Context -.-> WorkerAgent
+    Context -.-> ExecutorAgent
+    
+    TaskQueue -.-> Orchestrator
+```
+
+This component architecture ensures loose coupling, high cohesion, and clear separation of concerns across the entire SDK.

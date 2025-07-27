@@ -1,0 +1,185 @@
+---
+title: 'System Architecture Overview'
+description: 'High-level technical architecture of the AI Agent SDK'
+---
+
+# System Architecture Overview
+
+The AI Agent SDK is designed as a modular, composable framework for building autonomous AI agents. The architecture follows a layered approach with clear separation of concerns.
+
+## High-Level Architecture
+
+```mermaid
+graph TB
+    subgraph "Application Layer"
+        App[User Application]
+        CLI[CLI Tools]
+    end
+    
+    subgraph "SDK Core"
+        ZEE[ZEE Workflow]
+        Agent[Agent]
+        LLM[LLM Interface]
+        Tools[Tools System]
+    end
+    
+    subgraph "AI Providers"
+        OpenAI[OpenAI]
+        Anthropic[Anthropic]
+        Google[Google AI]
+    end
+    
+    subgraph "External Services"
+        GoldRush[GoldRush API]
+        Custom[Custom Tools]
+    end
+    
+    App --> ZEE
+    CLI --> ZEE
+    ZEE --> Agent
+    Agent --> LLM
+    Agent --> Tools
+    LLM --> OpenAI
+    LLM --> Anthropic
+    LLM --> Google
+    Tools --> GoldRush
+    Tools --> Custom
+    
+    classDef core fill:#e1f5fe
+    classDef external fill:#f3e5f5
+    classDef provider fill:#e8f5e8
+    
+    class ZEE,Agent,LLM,Tools core
+    class GoldRush,Custom external
+    class OpenAI,Anthropic,Google provider
+```
+
+## Core Components
+
+### 1. ZEE Workflow Engine
+The orchestration layer that coordinates multiple agents to solve complex tasks.
+
+**Key Features:**
+- Multi-agent coordination
+- Task decomposition and planning
+- Context management
+- Iteration control
+
+### 2. Agent System
+Individual AI agents with specific roles and capabilities.
+
+**Key Features:**
+- System prompts and instructions
+- Tool integration
+- Context-aware responses
+- Temperature control
+
+### 3. LLM Interface
+Unified abstraction layer for different AI providers.
+
+**Key Features:**
+- Provider-agnostic API
+- Model switching
+- Response formatting
+- Error handling
+
+### 4. Tools System
+Extensible framework for adding external capabilities.
+
+**Key Features:**
+- Tool registration
+- Parameter validation
+- Async execution
+- Error handling
+
+## Architecture Principles
+
+### Modularity
+Each component is designed as an independent module with well-defined interfaces, enabling easy composition and testing.
+
+### Extensibility
+The architecture supports adding new providers, tools, and agent types without modifying core components.
+
+### Type Safety
+Built with TypeScript for compile-time type checking and enhanced developer experience.
+
+### Provider Agnostic
+Unified interface across different AI providers, allowing seamless switching between models.
+
+## System Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant ZEE as ZEE Workflow
+    participant Planner as Planner Agent
+    participant Worker as Worker Agent
+    participant LLM
+    participant Tools
+    
+    User->>ZEE: Initialize with goal
+    ZEE->>Planner: Generate task plan
+    Planner->>LLM: Request planning
+    LLM-->>Planner: Return plan
+    Planner-->>ZEE: Task breakdown
+    
+    loop For each task
+        ZEE->>Worker: Execute task
+        Worker->>LLM: Generate response
+        Worker->>Tools: Use tools if needed
+        Tools-->>Worker: Tool results
+        LLM-->>Worker: Response
+        Worker-->>ZEE: Task result
+    end
+    
+    ZEE-->>User: Final result
+```
+
+## Deployment Patterns
+
+### Single Agent
+For simple use cases requiring one specialized agent:
+
+```mermaid
+graph LR
+    App[Application] --> Agent[Agent] --> LLM[LLM] --> Provider[AI Provider]
+    Agent --> Tools[Tools]
+```
+
+### Multi-Agent Workflow
+For complex tasks requiring coordination:
+
+```mermaid
+graph TB
+    App[Application] --> ZEE[ZEE Workflow]
+    ZEE --> Planner[Planner Agent]
+    ZEE --> AgentA[Specialist Agent A]
+    ZEE --> AgentB[Specialist Agent B]
+    ZEE --> AgentC[Specialist Agent C]
+    
+    Planner --> LLM1[LLM]
+    AgentA --> LLM2[LLM]
+    AgentB --> LLM3[LLM]
+    AgentC --> LLM4[LLM]
+    
+    AgentA --> Tools1[Tools]
+    AgentB --> Tools2[Tools]
+```
+
+## Configuration Management
+
+The SDK uses a hierarchical configuration system:
+
+```mermaid
+graph TD
+    Global[Global Config] --> Workflow[Workflow Config]
+    Workflow --> Agent1[Agent Config]
+    Workflow --> Agent2[Agent Config]
+    
+    Agent1 --> Model1[Model Config]
+    Agent1 --> Tools1[Tools Config]
+    Agent2 --> Model2[Model Config]
+    Agent2 --> Tools2[Tools Config]
+```
+
+This architecture ensures scalability, maintainability, and flexibility for building sophisticated AI agent systems.
